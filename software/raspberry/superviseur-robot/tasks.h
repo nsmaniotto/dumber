@@ -149,6 +149,8 @@ private:
      */
     Message *ReadInQueue(RT_QUEUE *queue);
 
+    void BatteryTask(void *arg);
+
 };
 
 #endif // __TASKS_H__ 
