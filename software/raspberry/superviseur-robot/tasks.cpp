@@ -460,3 +460,27 @@ void Tasks::BatteryTask(void *arg)
 }
 
 
+void Tasks::WatchDog(void *arg)
+{
+    int rs;
+    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+    // Synchronization barrier (waiting that all tasks are starting)
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+    while(1)
+    {
+        /*bloquer le mutex*/
+        rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+        rs = robotStarted;
+        rt_mutex_release(&mutex_robotStarted);
+        
+        if(rs==1)
+        {
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            robot.Write(new Message(MESSAGE_ROBOT_START_WITH_WD));
+            rt_mutex_release(&mutex_robot);
+            
+        }
+    }
+    
+    
+}
