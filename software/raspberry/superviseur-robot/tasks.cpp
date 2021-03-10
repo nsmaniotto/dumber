@@ -28,6 +28,9 @@
 #define PRIORITY_TCAMERA 21
 #define PRIORITY_TBATTERY 98
 
+// Declaring Task constants
+#define TASKS_MAXIMUM_WRITING_ATTEMPT 3
+
 /*
  * Some remarks:
  * 1- This program is mostly a template. It shows you how to create tasks, semaphore
@@ -385,9 +388,29 @@ void Tasks::MoveTask(void *arg) {
             
             cout << " move: " << cpMove;
             
-            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            robot.Write(new Message((MessageID)cpMove));
-            rt_mutex_release(&mutex_robot);
+            /* START FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
+            bool messageSent = false;
+            int attemptsCount = 0;
+            bool keepAttempting = true; // staying in the while loop until further condition
+            
+            do
+            {               
+                attemptsCount++;
+                
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                Message* writingResult = robot.Write(new Message((MessageID)cpMove));
+                rt_mutex_release(&mutex_robot);
+                
+                bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
+                
+                if(!lost)
+                    messageSent = true;
+                else if (attemptsCount >= TASKS_MAXIMUM_WRITING_ATTEMPT)
+                    keepAttempting = false; // Leaving the while loop after 3 attempts*
+                
+            } while(keepAttempting);
+            /* END FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
+
         }
         cout << endl << flush;
     }
