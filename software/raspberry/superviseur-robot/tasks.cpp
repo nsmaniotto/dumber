@@ -26,6 +26,7 @@
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
 #define PRIORITY_TCAMERA 21
+#define PRIORITY_TBATTERY 98
 
 /*
  * Some remarks:
@@ -53,7 +54,7 @@
 void Tasks::Init() {
     int status;
     int err;
-
+    cout << "init start" << endl << flush;
     /**************************************************************************************/
     /* 	Mutex creation                                                                    */
     /**************************************************************************************/
@@ -123,6 +124,10 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_create(&th_battery, "th_battery", 0, PRIORITY_TBATTERY, 0)) {
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Tasks created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -167,6 +172,11 @@ void Tasks::Run() {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    
+    if (err = rt_task_start(&th_battery, (void(*)(void*)) & Tasks::BatteryTask, this)) {
+        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
 
     cout << "Tasks launched" << endl << flush;
 }
@@ -194,7 +204,7 @@ void Tasks::ServerTask(void *arg) {
     int status;
     
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
-    // Synchronization barrier (waiting that all tasks are started)
+    // Synchronization barrier (waiting that all tasks are started)th_move
     rt_sem_p(&sem_barrier, TM_INFINITE);
 
     /**************************************************************************************/
@@ -419,7 +429,8 @@ void Tasks::BatteryTask(void *arg)
 {
     int rs;
     int cpMove;
-    
+    Message * lB;
+         
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
@@ -428,6 +439,7 @@ void Tasks::BatteryTask(void *arg)
     /*Beginnnig of the task*/
     while(1)
     {
+        rt_task_wait_period(NULL);
         /*bloquer le mutex*/
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
@@ -435,12 +447,14 @@ void Tasks::BatteryTask(void *arg)
         
         if(rs==1) 
         {
+            cout << "Get battery level" << endl;
+            
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             Message *levelBattery = robot.GetBattery();
+            lB = robot.Write(levelBattery);
             rt_mutex_release(&mutex_robot);
-            rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
-            monitor.Write(levelBattery);
-            rt_mutex_release(&mutex_monitor);            
+            
+            WriteInQueue(&q_messageToMon, lB);         
         }
     }
 }
