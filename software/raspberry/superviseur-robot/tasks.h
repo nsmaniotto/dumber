@@ -132,6 +132,11 @@ private:
      */
     void MoveTask(void *arg);
     
+    /**
+     * @brief handling start with watchdog.
+     */
+    void WatchDog(void *arg);
+    
     /**********************************************************************/
     /* Queue services                                                     */
     /**********************************************************************/
