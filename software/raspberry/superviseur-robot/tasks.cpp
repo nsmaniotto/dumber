@@ -384,10 +384,14 @@ void Tasks::StartRobotTask(void *arg) {
             else
             {
                 cout<<"ACK recieve";
+                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                robotStarted = 1;
+                rt_mutex_release(&mutex_robotStarted);
                 rt_mutex_acquire(&mutex_robot, TM_INFINITE);
                 robot.Write(new Message(MESSAGE_ROBOT_RELOAD_WD));
                 rt_mutex_release(&mutex_robot);
                 monitor.Write(new Message(MESSAGE_ANSWER_ACK));
+                
             }      
             rt_mutex_release(&mutex_monitor);
         }
