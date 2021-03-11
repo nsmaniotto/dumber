@@ -78,6 +78,7 @@ private:
     RT_TASK th_startRobot;
     RT_TASK th_move;
     RT_TASK th_battery;
+    RT_TASK th_watchdog;
     
     /**********************************************************************/
     /* Mutex                                                              */
@@ -86,6 +87,7 @@ private:
     RT_MUTEX mutex_robot;
     RT_MUTEX mutex_robotStarted;
     RT_MUTEX mutex_move;
+    RT_MUTEX mutex_watchdog;
 
     /**********************************************************************/
     /* Semaphores                                                         */
