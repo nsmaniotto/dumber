@@ -469,7 +469,7 @@ void Tasks::MoveTask(void *arg) {
             
             cout << " move: " << cpMove;
             
-            WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToMon
+            WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
             
             }
         cout << endl << flush;
@@ -534,8 +534,9 @@ void Tasks::BatteryTask(void *arg)
             
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             Message *levelBattery = robot.GetBattery();
-            lB = robot.Write(levelBattery);
             rt_mutex_release(&mutex_robot);
+            
+            WriteInQueue(&q_messageToRobot, levelBattery); // levelBattery will be deleted by sendToRobot
             
             WriteInQueue(&q_messageToMon, lB);         
         }
