@@ -23,6 +23,7 @@
 #define PRIORITY_TOPENCOMROBOT 20
 #define PRIORITY_TMOVE 20
 #define PRIORITY_TSENDTOMON 22
+#define PRIORITY_TSENDTOROBOT 22
 #define PRIORITY_TRECEIVEFROMMON 25
 #define PRIORITY_TSTARTROBOT 20
 #define PRIORITY_TCAMERA 21
@@ -111,6 +112,10 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_create(&th_sendToRobot, "th_sendToRobot", 0, PRIORITY_TSENDTOROBOT, 0)) {
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     if (err = rt_task_create(&th_receiveFromMon, "th_receiveFromMon", 0, PRIORITY_TRECEIVEFROMMON, 0)) {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
@@ -136,12 +141,19 @@ void Tasks::Init() {
     /**************************************************************************************/
     /* Message queues creation                                                            */
     /**************************************************************************************/
+    /* Monitor queue */
     if ((err = rt_queue_create(&q_messageToMon, "q_messageToMon", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
         cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     cout << "Queues created successfully" << endl << flush;
-
+    
+    /* Robot queue */
+    if ((err = rt_queue_create(&q_messageToRobot, "q_messageToRobot", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
+        cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    cout << "Queues created successfully" << endl << flush;
 }
 
 /**
@@ -156,6 +168,10 @@ void Tasks::Run() {
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_sendToMon, (void(*)(void*)) & Tasks::SendToMonTask, this)) {
+        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
+    if (err = rt_task_start(&th_sendToRobot, (void(*)(void*)) & Tasks::SendToRobotTask, this)) {
         cerr << "Error task start: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -249,6 +265,71 @@ void Tasks::SendToMonTask(void* arg) {
         rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
         monitor.Write(msg); // The message is deleted with the Write
         rt_mutex_release(&mutex_monitor);
+    }
+}
+
+/**
+ * @brief Thread sending data to robot.
+ */
+void Tasks::SendToRobotTask(void* arg) {
+    Message *msg;
+    
+    cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
+    // Synchronization barrier (waiting that all tasks are starting)
+    rt_sem_p(&sem_barrier, TM_INFINITE);
+
+    /**************************************************************************************/
+    /* The task sendToMon starts here                                                     */
+    /**************************************************************************************/
+    rt_sem_p(&sem_serverOk, TM_INFINITE);
+
+    while (1) {
+        cout << "wait msg to send" << endl << flush;
+        msg = ReadInQueue(&q_messageToRobot);
+        cout << "Send msg to robot: " << msg->ToString() << endl << flush;
+        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+        robot.Write(msg); // The message is deleted with the Write
+        rt_mutex_release(&mutex_tobot);
+        
+        /* START FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
+        bool messageSent = false;
+        int attemptsCount = 0;
+        bool keepAttempting = true; // staying in the while loop until further condition
+
+        do
+        {               
+            attemptsCount++;
+
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            Message* writingResult = robot.Write(new Message((MessageID)cpMove));
+            rt_mutex_release(&mutex_robot);
+
+            bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
+
+            if(!lost)
+                messageSent = true;
+            else if (attemptsCount >= TASKS_MAXIMUM_WRITING_ATTEMPT)
+                keepAttempting = false; // Leaving the while loop after 3 attempts*
+
+        } while(keepAttempting);
+        /* END FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
+
+        /* START FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
+        if(!messageSent)
+        {
+            // Send a specific message to the monitor
+            Message * msgSend = new Message(MESSAGE_ANSWER_COM_ERROR); // LOST_DBM in conception
+
+            WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
+
+            // Shut down the communication between the robot and the supervisor
+            robot.Close(); // close_communication_robot() in conception
+
+            // Going back to an initial state allowing to reboot communication
+            // initialize_communication_robot() in conception
+
+        }
+        /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
     }
 }
 
@@ -388,45 +469,7 @@ void Tasks::MoveTask(void *arg) {
             
             cout << " move: " << cpMove;
             
-            /* START FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
-            bool messageSent = false;
-            int attemptsCount = 0;
-            bool keepAttempting = true; // staying in the while loop until further condition
-            
-            do
-            {               
-                attemptsCount++;
-                
-                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-                Message* writingResult = robot.Write(new Message((MessageID)cpMove));
-                rt_mutex_release(&mutex_robot);
-                
-                bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
-                
-                if(!lost)
-                    messageSent = true;
-                else if (attemptsCount >= TASKS_MAXIMUM_WRITING_ATTEMPT)
-                    keepAttempting = false; // Leaving the while loop after 3 attempts*
-                
-            } while(keepAttempting);
-            /* END FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
-            
-            /* START FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
-            if(!messageSent)
-            {
-                // Send a specific message to the monitor
-                Message * msgSend = new Message(MESSAGE_ANSWER_COM_ERROR); // LOST_DBM in conception
-                
-                WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
-                
-                // Shut down the communication between the robot and the supervisor
-                robot.Close(); // close_communication_robot() in conception
-                
-                // Going back to an initial state allowing to reboot communication
-                // initialize_communication_robot() in conception
-                
-            }
-            /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
+            WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToMon
             
             }
         cout << endl << flush;
