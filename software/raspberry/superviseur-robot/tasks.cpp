@@ -31,6 +31,9 @@
 // Declaring Task constants
 #define TASKS_MAXIMUM_WRITING_ATTEMPT 3
 
+
+bool start_with_watchdog = false;
+
 /*
  * Some remarks:
  * 1- This program is mostly a template. It shows you how to create tasks, semaphore
@@ -279,6 +282,9 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
             rt_sem_v(&sem_startRobot);
+        } else if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD))
+        {
+            start_with_watchdog=true;rt_sem_v(&sem_startRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_GO_FORWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_BACKWARD) ||
                 msgRcv->CompareID(MESSAGE_ROBOT_GO_LEFT) ||
@@ -326,6 +332,8 @@ void Tasks::OpenComRobot(void *arg) {
     }
 }
 
+
+
 /**
  * @brief Thread starting the communication with the robot.
  */
@@ -340,21 +348,48 @@ void Tasks::StartRobotTask(void *arg) {
     while (1) {
 
         Message * msgSend;
-        rt_sem_p(&sem_startRobot, TM_INFINITE);
-        cout << "Start robot without watchdog (";
-        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        msgSend = robot.Write(robot.StartWithoutWD());
-        rt_mutex_release(&mutex_robot);
-        cout << msgSend->GetID();
-        cout << ")" << endl;
+        if(start_with_watchdog==false)
+        { 
+            rt_sem_p(&sem_startRobot, TM_INFINITE);
+            cout << "Start robot without watchdog (";
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            msgSend = robot.Write(robot.StartWithoutWD());
+            rt_mutex_release(&mutex_robot);
+            cout << msgSend->GetID();
+            cout << ")" << endl;
 
-        cout << "Movement answer: " << msgSend->ToString() << endl << flush;
-        WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
+            cout << "Movement answer: " << msgSend->ToString() << endl << flush;
+            WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
 
-        if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
-            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-            robotStarted = 1;
-            rt_mutex_release(&mutex_robotStarted);
+            if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
+                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                robotStarted = 1;
+                rt_mutex_release(&mutex_robotStarted);
+            }
+        }
+        else 
+        {
+            cout << "Start robot with watchdog ";
+            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+            Message *err=robot.Write(new Message(MESSAGE_ROBOT_START_WITH_WD));
+            rt_mutex_release(&mutex_robot);
+            
+           
+            rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
+            if (err->GetID()==MESSAGE_ANSWER_COM_ERROR ){
+                cout<<"ACK error";
+                monitor.Write(new Message(MESSAGE_ANSWER_NACK));
+               
+            }
+            else
+            {
+                cout<<"ACK recieve";
+                rt_mutex_acquire(&mutex_robot, TM_INFINITE);
+                robot.Write(new Message(MESSAGE_ROBOT_RELOAD_WD));
+                rt_mutex_release(&mutex_robot);
+                monitor.Write(new Message(MESSAGE_ANSWER_ACK));
+            }      
+            rt_mutex_release(&mutex_monitor);
         }
     }
 }
