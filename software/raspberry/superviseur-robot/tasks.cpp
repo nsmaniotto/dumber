@@ -369,7 +369,7 @@ void Tasks::StartRobotTask(void *arg) {
         }
         else 
         {
-            cout << "Start robot with watchdog ";
+            cout << "Start robot with watchdog \n";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             Message *err=robot.Write(new Message(MESSAGE_ROBOT_START_WITH_WD));
             rt_mutex_release(&mutex_robot);
@@ -377,13 +377,13 @@ void Tasks::StartRobotTask(void *arg) {
            
             rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
             if (err->GetID()==MESSAGE_ANSWER_COM_ERROR ){
-                cout<<"ACK error";
+                cout<<"ACK error\n";
                 monitor.Write(new Message(MESSAGE_ANSWER_NACK));
                
             }
             else
             {
-                cout<<"ACK recieve";
+                cout<<"ACK recieve\n";
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
