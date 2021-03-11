@@ -295,7 +295,7 @@ void Tasks::SendToRobotTask(void* arg) {
     rt_sem_p(&sem_serverOk, TM_INFINITE);
 
     while (1) {
-        cout << "wait msg to send" << endl << flush;
+        cout << "wait msg to send to robot" << endl << flush;
         msg = ReadInQueue(&q_messageToRobot);
         cout << "Send msg to robot: " << msg->ToString() << endl << flush;
                 
@@ -304,12 +304,14 @@ void Tasks::SendToRobotTask(void* arg) {
         int attemptsCount = 0;
         bool keepAttempting = true; // staying in the while loop until further condition
 
+        Message* writingResult;
+        
         do
         {               
             attemptsCount++;
 
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            Message* writingResult = robot.Write(msg);
+            writingResult = robot.Write(msg);
             rt_mutex_release(&mutex_robot);
 
             bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
@@ -341,10 +343,39 @@ void Tasks::SendToRobotTask(void* arg) {
 
         }
         /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
+        
+        if(msg->CompareID(MESSAGE_ROBOT_START_WITH_WD))
+        {
+            if(writingResult->GetID() == MESSAGE_ANSWER_ACK)
+            {
+                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                robotStarted = 1;
+                rt_mutex_release(&mutex_robotStarted);
+            }
+        } 
+        else if (msg->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
+        {
+            if (writingResult->GetID()==MESSAGE_ANSWER_COM_ERROR ){
+                cout<<"ACK error\n";
+                
+                Message * msgSend = new Message(MESSAGE_ANSWER_NACK);
+                WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
+            }
+            else
+            {
+                cout<<"ACK receive\n";
+                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                robotStarted = 1;
+                rt_mutex_release(&mutex_robotStarted);
+                
+                Message * msgSendMon = new Message(MESSAGE_ANSWER_ACK);
+                WriteInQueue(&q_messageToMon, msgSendMon); // msgSendMon will be deleted by sendToMon
+            }
+        }
     }
 }
 
-/**
+/**sgSendRobot = robot.StartWithWD()
  * @brief Thread receiving data from monitor.
  */
 void Tasks::ReceiveFromMonTask(void *arg) {
@@ -441,10 +472,14 @@ void Tasks::StartRobotTask(void *arg) {
 
         Message * msgSend;
         rt_mutex_acquire(&mutex_watchdog,TM_INFINITE);
-
-        if(start_with_watchdog==false)
+        bool temp_start_with_watchdog = start_with_watchdog;
+        cout << "SANS WATCHDOG TEST\n";
+        rt_mutex_release(&mutex_watchdog);
+        
+        cout << "STest1";
+        if(!temp_start_with_watchdog)
         { 
-            rt_mutex_release(&mutex_watchdog);
+           
             rt_sem_p(&sem_startRobot, TM_INFINITE);
             cout << "Start robot without watchdog (";
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
@@ -453,47 +488,16 @@ void Tasks::StartRobotTask(void *arg) {
 
             WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
 
-            cout << msgSend->GetID();
-            cout << ")" << endl;
-
-            cout << "Movement answer: " << msgSend->ToString() << endl << flush;
-            WriteInQueue(&q_messageToMon, msgSend);  // msgSend will be deleted by sendToMon
-
-            if (msgSend->GetID() == MESSAGE_ANSWER_ACK) {
-                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-                robotStarted = 1;
-                rt_mutex_release(&mutex_robotStarted);
-            }
         }
         else 
         {
-            rt_mutex_release(&mutex_watchdog);
+           
             cout << "Start robot with watchdog \n";
             Message * msgSendRobot;
-            
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             msgSendRobot = robot.StartWithWD();
             rt_mutex_release(&mutex_robot);
-            
             WriteInQueue(&q_messageToRobot, msgSendRobot); // msgSendRobot will be deleted by sendToRobot
-            
-           
-            if (msgSendRobot->GetID()==MESSAGE_ANSWER_COM_ERROR ){
-                cout<<"ACK error\n";
-                
-                Message * msgSend = new Message(MESSAGE_ANSWER_NACK);
-                WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
-            }
-            else
-            {
-                cout<<"ACK receive\n";
-                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-                robotStarted = 1;
-                rt_mutex_release(&mutex_robotStarted);
-                
-                Message * msgSendMon = new Message(MESSAGE_ANSWER_ACK);
-                WriteInQueue(&q_messageToMon, msgSendMon); // msgSendMon will be deleted by sendToMon
-            }
         }
     }
 }
