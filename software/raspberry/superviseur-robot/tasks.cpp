@@ -298,7 +298,7 @@ void Tasks::SendToRobotTask(void* arg) {
             attemptsCount++;
 
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            Message* writingResult = robot.Write(msg));
+            Message* writingResult = robot.Write(msg);
             rt_mutex_release(&mutex_robot);
 
             bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
@@ -424,7 +424,7 @@ void Tasks::StartRobotTask(void *arg) {
         msgSend = robot.StartWithoutWD();
         rt_mutex_release(&mutex_robot);
         
-        WriteInQueue(&q_messageToRobot, msgSend); WriteInQueue// msgSend will be deleted by sendToRobot
+        WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
                 
         cout << msgSend->GetID();
         cout << ")" << endl;
@@ -471,7 +471,7 @@ void Tasks::MoveTask(void *arg) {
             
             Message * msgSend = new Message((MessageID)cpMove);
             
-            WriteInQueue(&q_messageToRobot, msgSend); WriteInQueue// msgSend will be deleted by sendToRobot
+            WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
             
             }
         cout << endl << flush;
