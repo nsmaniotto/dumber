@@ -559,9 +559,9 @@ void Tasks::WatchDog(void *arg)
         
         if(rs==1)
         {
-            rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            robot.Write(new Message(MESSAGE_ROBOT_START_WITH_WD));
-            rt_mutex_release(&mutex_robot);
+            Message * msgSend = new Message(MESSAGE_ROBOT_START_WITH_WD);
+            
+            WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
             
         }
     }
