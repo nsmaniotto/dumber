@@ -72,6 +72,7 @@ private:
     /**********************************************************************/
     RT_TASK th_server;
     RT_TASK th_sendToMon;
+    RT_TASK th_sendToRobot;
     RT_TASK th_receiveFromMon;
     RT_TASK th_openComRobot;
     RT_TASK th_startRobot;
@@ -99,6 +100,7 @@ private:
     /**********************************************************************/
     int MSG_QUEUE_SIZE;
     RT_QUEUE q_messageToMon;
+    RT_QUEUE q_messageToRobot;
     
     /**********************************************************************/
     /* Tasks' functions                                                   */
@@ -112,6 +114,11 @@ private:
      * @brief Thread sending data to monitor.
      */
     void SendToMonTask(void *arg);
+     
+    /**
+     * @brief Thread sending data to robot.
+     */
+    void SendToRobotTask(void *arg);
         
     /**
      * @brief Thread receiving data from monitor.
