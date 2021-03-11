@@ -410,8 +410,25 @@ void Tasks::MoveTask(void *arg) {
                 
             } while(keepAttempting);
             /* END FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
-
-        }
+            
+            /* START FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
+            if(!messageSent)
+            {
+                // Send a specific message to the monitor
+                Message * msgSend = new Message(MESSAGE_ANSWER_COM_ERROR); // LOST_DBM in conception
+                
+                WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
+                
+                // Shut down the communication between the robot and the supervisor
+                robot.Close(); // close_communication_robot() in conception
+                
+                // Going back to an initial state allowing to reboot communication
+                // initialize_communication_robot() in conception
+                
+            }
+            /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
+            
+            }
         cout << endl << flush;
     }
 }
