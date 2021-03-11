@@ -139,6 +139,10 @@ void Tasks::Init() {
         cerr << "Error task create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_task_create(&th_watchdog, "th_watchdog", 0, PRIORITY_TBATTERY, 0)) {
+        cerr << "Error task create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Tasks created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -167,41 +171,41 @@ void Tasks::Run() {
     int err;
 
     if (err = rt_task_start(&th_server, (void(*)(void*)) & Tasks::ServerTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 1: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_sendToMon, (void(*)(void*)) & Tasks::SendToMonTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 2: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_sendToRobot, (void(*)(void*)) & Tasks::SendToRobotTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 3: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_receiveFromMon, (void(*)(void*)) & Tasks::ReceiveFromMonTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 4: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_openComRobot, (void(*)(void*)) & Tasks::OpenComRobot, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 5: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_startRobot, (void(*)(void*)) & Tasks::StartRobotTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 6: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     if (err = rt_task_start(&th_move, (void(*)(void*)) & Tasks::MoveTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 7: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     
     if (err = rt_task_start(&th_battery, (void(*)(void*)) & Tasks::BatteryTask, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 8: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
       
     if (err = rt_task_start(&th_watchdog, (void(*)(void*)) & Tasks::WatchDog, this)) {
-        cerr << "Error task start: " << strerror(-err) << endl << flush;
+        cerr << "Error task start 9: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
 
@@ -607,19 +611,17 @@ void Tasks::WatchDog(void *arg)
     while(1)
     {
         /*bloquer le mutex*/
+        rt_task_wait_period(NULL);
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
         rt_mutex_release(&mutex_robotStarted);
-        
         rt_mutex_acquire(&mutex_watchdog, TM_INFINITE);
         if(rs==1 && start_with_watchdog)
         {
-            rt_mutex_release(&mutex_watchdog);
             Message * msgSend = new Message(MESSAGE_ROBOT_RELOAD_WD);
             WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
             
         }
+        rt_mutex_release(&mutex_watchdog);
     }
-    
-    
 }
