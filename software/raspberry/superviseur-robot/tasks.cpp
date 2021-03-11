@@ -335,7 +335,9 @@ void Tasks::SendToRobotTask(void* arg) {
 
             // Going back to an initial state allowing to reboot communication
             // initialize_communication_robot() in conception
-            // TODO
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            robotStarted = 0;
+            rt_mutex_release(&mutex_robotStarted);
 
         }
         /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
@@ -467,17 +469,20 @@ void Tasks::StartRobotTask(void *arg) {
         {
             rt_mutex_release(&mutex_watchdog);
             cout << "Start robot with watchdog \n";
+            Message * msgSendRobot;
+            
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            Message *err=robot.Write(robot.StartWithWD());
+            msgSendRobot = robot.StartWithWD();
             rt_mutex_release(&mutex_robot);
             
+            WriteInQueue(&q_messageToRobot, msgSendRobot); // msgSendRobot will be deleted by sendToRobot
             
            
-            rt_mutex_acquire(&mutex_monitor, TM_INFINITE);
-            if (err->GetID()==MESSAGE_ANSWER_COM_ERROR ){
+            if (msgSendRobot->GetID()==MESSAGE_ANSWER_COM_ERROR ){
                 cout<<"ACK error\n";
-                monitor.Write(new Message(MESSAGE_ANSWER_NACK));
-               
+                
+                Message * msgSend = new Message(MESSAGE_ANSWER_NACK);
+                WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
             }
             else
             {
@@ -485,9 +490,10 @@ void Tasks::StartRobotTask(void *arg) {
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
-                monitor.Write(new Message(MESSAGE_ANSWER_ACK));    
-            }      
-            rt_mutex_release(&mutex_monitor);
+                
+                Message * msgSendMon = new Message(MESSAGE_ANSWER_ACK);
+                WriteInQueue(&q_messageToMon, msgSendMon); // msgSendMon will be deleted by sendToMon
+            }
         }
     }
 }
