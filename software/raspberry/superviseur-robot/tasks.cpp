@@ -279,7 +279,7 @@ void Tasks::SendToRobotTask(void* arg) {
     rt_sem_p(&sem_barrier, TM_INFINITE);
 
     /**************************************************************************************/
-    /* The task sendToMon starts here                                                     */
+    /* The task sendToRobot starts here                                                     */
     /**************************************************************************************/
     rt_sem_p(&sem_serverOk, TM_INFINITE);
 
@@ -287,10 +287,7 @@ void Tasks::SendToRobotTask(void* arg) {
         cout << "wait msg to send" << endl << flush;
         msg = ReadInQueue(&q_messageToRobot);
         cout << "Send msg to robot: " << msg->ToString() << endl << flush;
-        rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        robot.Write(msg); // The message is deleted with the Write
-        rt_mutex_release(&mutex_tobot);
-        
+                
         /* START FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
         bool messageSent = false;
         int attemptsCount = 0;
@@ -301,7 +298,7 @@ void Tasks::SendToRobotTask(void* arg) {
             attemptsCount++;
 
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-            Message* writingResult = robot.Write(new Message((MessageID)cpMove));
+            Message* writingResult = robot.Write(msg));
             rt_mutex_release(&mutex_robot);
 
             bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
@@ -424,8 +421,11 @@ void Tasks::StartRobotTask(void *arg) {
         rt_sem_p(&sem_startRobot, TM_INFINITE);
         cout << "Start robot without watchdog (";
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
-        msgSend = robot.Write(robot.StartWithoutWD());
+        msgSend = robot.StartWithoutWD();
         rt_mutex_release(&mutex_robot);
+        
+        WriteInQueue(&q_messageToRobot, msgSend); WriteInQueue// msgSend will be deleted by sendToRobot
+                
         cout << msgSend->GetID();
         cout << ")" << endl;
 
@@ -469,7 +469,9 @@ void Tasks::MoveTask(void *arg) {
             
             cout << " move: " << cpMove;
             
-            WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
+            Message * msgSend = new Message((MessageID)cpMove);
+            
+            WriteInQueue(&q_messageToRobot, msgSend); WriteInQueue// msgSend will be deleted by sendToRobot
             
             }
         cout << endl << flush;
