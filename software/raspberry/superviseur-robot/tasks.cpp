@@ -81,6 +81,10 @@ void Tasks::Init() {
         cerr << "Error mutex create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
+    if (err = rt_mutex_create(&mutex_watchdog, NULL)) {
+        cerr << "Error mutex create: " << strerror(-err) << endl << flush;
+        exit(EXIT_FAILURE);
+    }
     cout << "Mutexes created successfully" << endl << flush;
 
     /**************************************************************************************/
@@ -244,7 +248,7 @@ void Tasks::ServerTask(void *arg) {
     status = monitor.Open(SERVER_PORT);
     rt_mutex_release(&mutex_monitor);
 
-    cout << "Open server on port " << (SERVER_PORT) << " (" << status << ")" << endl;
+    cout << "Open server on port " << (SERVER_PORT) << " (" << status << ")" << endl << flush;
 
     if (status < 0) throw std::runtime_error {
         "Unable to start server on port " + std::to_string(SERVER_PORT)
@@ -298,26 +302,28 @@ void Tasks::SendToRobotTask(void* arg) {
         cout << "wait msg to send to robot" << endl << flush;
         msg = ReadInQueue(&q_messageToRobot);
         cout << "Send msg to robot: " << msg->ToString() << endl << flush;
-                
+        
+        Message * msgCopy = new Message(msg->GetID());
+               
         /* START FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
         bool messageSent = false;
         int attemptsCount = 0;
         bool keepAttempting = true; // staying in the while loop until further condition
-
-        Message* writingResult;
         
+        Message* writingResult;
         do
-        {               
+        {   
+            cout << "trying to send msg to robot" << endl << flush;
             attemptsCount++;
 
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             writingResult = robot.Write(msg);
             rt_mutex_release(&mutex_robot);
-
             bool lost = writingResult->CompareID(MESSAGE_ANSWER_ROBOT_TIMEOUT); // robot.Write() returns a message with a specific ID
-
-            if(!lost)
-                messageSent = true;
+            if(!lost) {
+                cout << "connection not lost" << endl << flush;
+                messageSent = true; keepAttempting = false;
+            }
             else if (attemptsCount >= TASKS_MAXIMUM_WRITING_ATTEMPT)
                 keepAttempting = false; // Leaving the while loop after 3 attempts*
 
@@ -344,16 +350,17 @@ void Tasks::SendToRobotTask(void* arg) {
         }
         /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
         
-        if(msg->CompareID(MESSAGE_ROBOT_START_WITH_WD))
+        if(msgCopy->CompareID(MESSAGE_ROBOT_START_WITH_WD))
         {
             if(writingResult->GetID() == MESSAGE_ANSWER_ACK)
             {
+                cout << "On entre bien dans le watchdog" << endl << flush; 
                 rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
                 robotStarted = 1;
                 rt_mutex_release(&mutex_robotStarted);
             }
         } 
-        else if (msg->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
+        else if (msgCopy->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
         {
             if (writingResult->GetID()==MESSAGE_ANSWER_COM_ERROR ){
                 cout<<"ACK error\n";
@@ -372,6 +379,13 @@ void Tasks::SendToRobotTask(void* arg) {
                 WriteInQueue(&q_messageToMon, msgSendMon); // msgSendMon will be deleted by sendToMon
             }
         }
+        else if (msgCopy->CompareID(MESSAGE_ROBOT_BATTERY_GET))
+        {
+            WriteInQueue(&q_messageToMon, writingResult); 
+        }
+        
+        delete(msgCopy);
+        delete(writingResult);
     }
 }
 
@@ -404,6 +418,7 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             rt_sem_v(&sem_startRobot);
         } else if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD))
         {
+            cout << "On a choisit le bon mode" << endl << flush;
             rt_mutex_acquire(&mutex_watchdog,TM_INFINITE);
             start_with_watchdog=true;
             rt_mutex_release(&mutex_watchdog);
@@ -438,11 +453,11 @@ void Tasks::OpenComRobot(void *arg) {
     /**************************************************************************************/
     while (1) {
         rt_sem_p(&sem_openComRobot, TM_INFINITE);
-        cout << "Open serial com (";
+        cout << "Open serial com (" << endl << flush;
         rt_mutex_acquire(&mutex_robot, TM_INFINITE);
         status = robot.Open();
         rt_mutex_release(&mutex_robot);
-        cout << status;
+        cout << status << endl << flush;
         cout << ")" << endl << flush;
 
         Message * msgSend;
@@ -469,19 +484,17 @@ void Tasks::StartRobotTask(void *arg) {
     /* The task startRobot starts here                                                    */
     /**************************************************************************************/
     while (1) {
-
+        rt_sem_p(&sem_startRobot, TM_INFINITE);       
         Message * msgSend;
         rt_mutex_acquire(&mutex_watchdog,TM_INFINITE);
         bool temp_start_with_watchdog = start_with_watchdog;
-        cout << "SANS WATCHDOG TEST\n";
+        cout << temp_start_with_watchdog << endl << flush;
         rt_mutex_release(&mutex_watchdog);
         
-        cout << "STest1";
         if(!temp_start_with_watchdog)
         { 
            
-            rt_sem_p(&sem_startRobot, TM_INFINITE);
-            cout << "Start robot without watchdog (";
+            cout << "Start robot without watchdog (" << endl << flush;
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             msgSend = robot.StartWithoutWD();
             rt_mutex_release(&mutex_robot);
@@ -492,7 +505,7 @@ void Tasks::StartRobotTask(void *arg) {
         else 
         {
            
-            cout << "Start robot with watchdog \n";
+            cout << "Start robot with watchdog" << endl << flush;
             Message * msgSendRobot;
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             msgSendRobot = robot.StartWithWD();
@@ -520,25 +533,26 @@ void Tasks::MoveTask(void *arg) {
 
     while (1) {
         rt_task_wait_period(NULL);
-        cout << "Periodic movement update";
         rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
         rs = robotStarted;
         rt_mutex_release(&mutex_robotStarted);
         if (rs == 1) {
+            cout << "Periodic movement update" << endl << flush;
+
             rt_mutex_acquire(&mutex_move, TM_INFINITE);
             cpMove = move;
             rt_mutex_release(&mutex_move);
             
-            cout << " move: " << cpMove;
+            cout << " move: " << cpMove << endl << flush;
             
             Message * msgSend = new Message((MessageID)cpMove);
             
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
             rt_mutex_release(&mutex_robot);
-            
+            cout << endl << flush;
+
             }
-        cout << endl << flush;
     }
 }
 
@@ -563,14 +577,12 @@ void Tasks::WriteInQueue(RT_QUEUE *queue, Message *msg) {
 Message *Tasks::ReadInQueue(RT_QUEUE *queue) {
     int err;
     Message *msg;
-
     if ((err = rt_queue_read(queue, &msg, sizeof ((void*) &msg), TM_INFINITE)) < 0) {
         cout << "Read in queue failed: " << strerror(-err) << endl << flush;
         throw std::runtime_error{"Error in read in queue"};
-    }/** else {
+    } /*else {
         cout << "@msg :" << msg << endl << flush;
-    } /**/
-
+    } */
     return msg;
 }
 
@@ -595,17 +607,12 @@ void Tasks::BatteryTask(void *arg)
         rt_mutex_release(&mutex_robotStarted);
         
         if(rs==1) 
-        {
-            cout << "Get battery level" << endl;
-            
+        {  
             rt_mutex_acquire(&mutex_robot, TM_INFINITE);
             Message *levelBattery = robot.GetBattery();
-            WriteInQueue(&q_messageToRobot, levelBattery); // levelBattery will be deleted by sendToRobot
             rt_mutex_release(&mutex_robot);
             
-            //WriteInQueue(&q_messageToRobot, levelBattery); // levelBattery will be deleted by sendToRobot
-            
-            WriteInQueue(&q_messageToMon, lB);         
+            WriteInQueue(&q_messageToRobot, levelBattery); // levelBattery will be deleted by sendToRobot
         }
     }
 }
