@@ -406,8 +406,14 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             rt_mutex_release(&mutex_move);
             
             // Close the communication with the robot
+            robot.Close();
             
-            // Close the server 
+            // Close the server to come back to the starting state
+            stop();
+            
+            rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+            robotStarted = 0;
+            rt_mutex_release(&mutex_robotStarted);
             
             /* END FEATURE 6 : MANAGE COMMUNICATION LOST WITH MONITOR */
         }
