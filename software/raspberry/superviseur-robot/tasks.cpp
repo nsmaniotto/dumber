@@ -395,10 +395,21 @@ void Tasks::ReceiveFromMonTask(void *arg) {
         msgRcv = monitor.Read();
         cout << "Rcv <= " << msgRcv->ToString() << endl << flush;
 
+        /* START FEATURE 5 : DETECT COMMUNICATION LOST WITH MONITOR */
         if (msgRcv->CompareID(MESSAGE_MONITOR_LOST)) {
             delete(msgRcv);
-            exit(-1);
-        } else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
+            
+            /* START FEATURE 6 : MANAGE COMMUNICATION LOST WITH MONITOR */
+            // Stop the robot
+            
+            // Close the communication with the robot
+            
+            // Close the server 
+            
+            /* END FEATURE 6 : MANAGE COMMUNICATION LOST WITH MONITOR */
+        }
+        /* END FEATURE 5 : DETECT COMMUNICATION LOST WITH MONITOR */
+        else if (msgRcv->CompareID(MESSAGE_ROBOT_COM_OPEN)) {
             rt_sem_v(&sem_openComRobot);
         } else if (msgRcv->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD)) {
             rt_sem_v(&sem_startRobot);
