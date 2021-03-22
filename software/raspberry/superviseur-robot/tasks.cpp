@@ -409,7 +409,7 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             robot.Close();
             
             // Close the server to come back to the starting state
-            stop();
+            monitor.Close();
             
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             robotStarted = 0;
