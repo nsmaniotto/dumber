@@ -401,6 +401,9 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             
             /* START FEATURE 6 : MANAGE COMMUNICATION LOST WITH MONITOR */
             // Stop the robot
+            rt_mutex_acquire(&mutex_move, TM_INFINITE);
+            move = MESSAGE_ROBOT_STOP;
+            rt_mutex_release(&mutex_move);
             
             // Close the communication with the robot
             
