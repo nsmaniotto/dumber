@@ -329,9 +329,49 @@ void Tasks::SendToRobotTask(void* arg) {
         } while(keepAttempting);
         /* END FEATURE 8 : DETECT COMMUNICATION LOST WITH ROBOT */
 
-        /* START FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
-        if(!messageSent)
+        if(messageSent)
         {
+            if(msgCopy->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
+            {
+                if(writingResult->GetID() == MESSAGE_ANSWER_ACK)
+                {
+                    cout << "sans WD" << endl << flush; 
+                    rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                    robotStarted = 1;
+                    rt_mutex_release(&mutex_robotStarted);
+                }
+            } 
+            else if (msgCopy->CompareID(MESSAGE_ROBOT_START_WITH_WD))
+            {
+                if (writingResult->GetID()==MESSAGE_ANSWER_COM_ERROR ){
+                    cout<<"ACK error\n";
+
+                    Message * msgSend = new Message(MESSAGE_ANSWER_NACK);
+                    WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
+                }
+                else
+                {
+                    cout<<"ACK receive (with WD)\n";
+                    rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
+                    robotStarted = 1;
+                    rt_mutex_release(&mutex_robotStarted);
+
+                    Message * msgSendMon = new Message(MESSAGE_ANSWER_ACK);
+                    WriteInQueue(&q_messageToMon, msgSendMon); // msgSendMon will be deleted by sendToMon
+                }
+            }
+            else if (msgCopy->CompareID(MESSAGE_ROBOT_BATTERY_GET))
+            {
+                WriteInQueue(&q_messageToMon, writingResult); 
+            }
+            //cout << "sendtorobot task end" << endl << flush;
+
+            delete(msgCopy);
+        }
+        else
+        {
+            /* START FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
+            
             // Send a specific message to the monitor
             Message * msgSend = new Message(MESSAGE_ANSWER_COM_ERROR); // LOST_DBM in conception
             cout << msgSend << endl << flush;
@@ -345,46 +385,9 @@ void Tasks::SendToRobotTask(void* arg) {
             rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
             robotStarted = 0;
             rt_mutex_release(&mutex_robotStarted);
-
+            
+            /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
         }
-        /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
-        
-        if(msgCopy->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
-        {
-            if(writingResult->GetID() == MESSAGE_ANSWER_ACK)
-            {
-                cout << "sans WD" << endl << flush; 
-                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-                robotStarted = 1;
-                rt_mutex_release(&mutex_robotStarted);
-            }
-        } 
-        else if (msgCopy->CompareID(MESSAGE_ROBOT_START_WITH_WD))
-        {
-            if (writingResult->GetID()==MESSAGE_ANSWER_COM_ERROR ){
-                cout<<"ACK error\n";
-                
-                Message * msgSend = new Message(MESSAGE_ANSWER_NACK);
-                WriteInQueue(&q_messageToMon, msgSend); // msgSend will be deleted by sendToMon
-            }
-            else
-            {
-                cout<<"ACK receive (with WD)\n";
-                rt_mutex_acquire(&mutex_robotStarted, TM_INFINITE);
-                robotStarted = 1;
-                rt_mutex_release(&mutex_robotStarted);
-                
-                Message * msgSendMon = new Message(MESSAGE_ANSWER_ACK);
-                WriteInQueue(&q_messageToMon, msgSendMon); // msgSendMon will be deleted by sendToMon
-            }
-        }
-        else if (msgCopy->CompareID(MESSAGE_ROBOT_BATTERY_GET))
-        {
-            WriteInQueue(&q_messageToMon, writingResult); 
-        }
-        //cout << "sendtorobot task end" << endl << flush;
-
-        delete(msgCopy);
     }
     
 }
