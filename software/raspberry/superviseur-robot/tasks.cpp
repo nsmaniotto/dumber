@@ -350,7 +350,7 @@ void Tasks::SendToRobotTask(void* arg) {
         }
         /* END FEATURE 9 : MANAGE COMMUNICATION LOST WITH ROBOT */
         
-        if(msgCopy->CompareID(MESSAGE_ROBOT_START_WITH_WD))
+        if(msgCopy->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
         {
             if(writingResult->GetID() == MESSAGE_ANSWER_ACK)
             {
@@ -360,7 +360,7 @@ void Tasks::SendToRobotTask(void* arg) {
                 rt_mutex_release(&mutex_robotStarted);
             }
         } 
-        else if (msgCopy->CompareID(MESSAGE_ROBOT_START_WITHOUT_WD))
+        else if (msgCopy->CompareID(MESSAGE_ROBOT_START_WITH_WD))
         {
             if (writingResult->GetID()==MESSAGE_ANSWER_COM_ERROR ){
                 cout<<"ACK error\n";
