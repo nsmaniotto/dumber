@@ -153,14 +153,14 @@ void Tasks::Init() {
     /* Message queues creation                                                            */
     /**************************************************************************************/
     /* Monitor queue */
-    if ((err = rt_queue_create(&q_messageToMon, "q_messageToMon", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
+    if ((err = rt_queue_create(&q_messageToMon, "q_messageToMon", sizeof (Message*)*500, Q_UNLIMITED, Q_FIFO)) < 0) {
         cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
     cout << "Queues created successfully" << endl << flush;
     
     /* Robot queue */
-    if ((err = rt_queue_create(&q_messageToRobot, "q_messageToRobot", sizeof (Message*)*50, Q_UNLIMITED, Q_FIFO)) < 0) {
+    if ((err = rt_queue_create(&q_messageToRobot, "q_messageToRobot", sizeof (Message*)*500, Q_UNLIMITED, Q_FIFO)) < 0) {
         cerr << "Error msg queue create: " << strerror(-err) << endl << flush;
         exit(EXIT_FAILURE);
     }
@@ -385,7 +385,6 @@ void Tasks::SendToRobotTask(void* arg) {
         //cout << "sendtorobot task end" << endl << flush;
 
         delete(msgCopy);
-        //delete(writingResult);
     }
     
 }
@@ -439,7 +438,7 @@ void Tasks::ReceiveFromMonTask(void *arg) {
             rt_sem_v(&sem_startRobot);
         } else if(msgRcv->CompareID(MESSAGE_ROBOT_START_WITH_WD))
         {
-            //cout << "On a choisit le bon mode" << endl << flush;
+            cout << "On a choisit le bon mode" << endl << flush;
             rt_mutex_acquire(&mutex_watchdog,TM_INFINITE);
             start_with_watchdog=true;
             rt_mutex_release(&mutex_watchdog);
@@ -644,7 +643,7 @@ void Tasks::WatchDog(void *arg)
     cout << "Start " << __PRETTY_FUNCTION__ << endl << flush;
     // Synchronization barrier (waiting that all tasks are starting)
     rt_sem_p(&sem_barrier, TM_INFINITE);
-    rt_task_set_periodic(NULL, TM_NOW, 10000000);
+    rt_task_set_periodic(NULL, TM_NOW, 1000000000);
     //
     while(1)
     {
@@ -658,7 +657,7 @@ void Tasks::WatchDog(void *arg)
         {
             Message * msgSend = new Message(MESSAGE_ROBOT_RELOAD_WD);
             WriteInQueue(&q_messageToRobot, msgSend); // msgSend will be deleted by sendToRobot
-            
+            cout << "dans wd 2" << endl << flush;            
         }
         rt_mutex_release(&mutex_watchdog);
     }
