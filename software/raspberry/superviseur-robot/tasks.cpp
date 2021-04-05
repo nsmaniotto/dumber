@@ -33,7 +33,6 @@
 #define TASKS_MAXIMUM_WRITING_ATTEMPT 3
 
 
-bool start_with_watchdog = false;
 
 /*
  * Some remarks:
